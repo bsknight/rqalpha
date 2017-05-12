@@ -23,11 +23,11 @@ from __future__ import division
 import six
 import numpy as np
 
-from .api_base import decorate_api_exc, instruments
+from .api_base import decorate_api_exc, instruments, cal_style
 from ..execution_context import ExecutionContext
 from ..environment import Environment
 from ..model.order import Order, MarketOrder, LimitOrder, OrderStyle
-from ..const import EXECUTION_PHASE, SIDE, POSITION_EFFECT, ORDER_TYPE
+from ..const import EXECUTION_PHASE, SIDE, POSITION_EFFECT, ORDER_TYPE, RUN_TYPE
 from ..model.instrument import Instrument
 from ..utils.exception import RQInvalidArgument
 from ..utils.logger import user_system_log
@@ -46,6 +46,80 @@ def export_as_api(func):
     return func
 
 
+def smart_order(order_book_id, quantity, style):
+    position = Environment.get_instance().portfolio.positions[order_book_id]
+    orders = []
+    if quantity > 0:
+        # 平昨仓
+        if position.sell_old_quantity > 0:
+            orders.append(order(
+                order_book_id,
+                min(quantity, position.sell_old_quantity),
+                SIDE.BUY,
+                POSITION_EFFECT.CLOSE,
+                style
+            ))
+            quantity -= position.sell_old_quantity
+        if quantity <= 0:
+            return orders
+        # 平今仓
+        if position.sell_today_quantity > 0:
+            orders.append(order(
+                order_book_id,
+                min(quantity, position.sell_today_quantity),
+                SIDE.BUY,
+                POSITION_EFFECT.CLOSE_TODAY,
+                style
+            ))
+            quantity -= position.sell_today_quantity
+        if quantity <= 0:
+            return orders
+        # 开多仓
+        orders.append(order(
+            order_book_id,
+            quantity,
+            SIDE.BUY,
+            POSITION_EFFECT.OPEN,
+            style
+        ))
+        return orders
+    else:
+        # 平昨仓
+        quantity *= -1
+        if position.buy_old_quantity > 0:
+            order.append(order(
+                order_book_id,
+                min(quantity, position.buy_old_quantity),
+                SIDE.SELL,
+                POSITION_EFFECT.CLOSE,
+                style
+            ))
+            quantity -= position.buy_old_quantity
+        if quantity <= 0:
+            return orders
+        # 平今仓
+        if position.buy_today_quantity > 0:
+            orders.append(order(
+                order_book_id,
+                min(quantity, position.buy_today_quantity),
+                SIDE.SELL,
+                POSITION_EFFECT.CLOSE_TODAY,
+                style
+            ))
+            quantity -= position.buy_today_quantity
+        if quantity <= 0:
+            return orders
+        # 开空仓
+        orders.append(order(
+            order_book_id,
+            quantity,
+            SIDE.SELL,
+            POSITION_EFFECT.OPEN,
+            style
+        ))
+        return orders
+
+
 @ExecutionContext.enforce_phase(EXECUTION_PHASE.ON_BAR,
                                 EXECUTION_PHASE.ON_TICK,
                                 EXECUTION_PHASE.SCHEDULED)
@@ -55,8 +129,6 @@ def export_as_api(func):
              verify_that('position_effect').is_in([POSITION_EFFECT.OPEN, POSITION_EFFECT.CLOSE]),
              verify_that('style').is_instance_of((LimitOrder, MarketOrder)))
 def order(id_or_ins, amount, side, position_effect, style):
-    if not isinstance(style, OrderStyle):
-        raise RuntimeError
     if amount <= 0:
         raise RuntimeError
     if isinstance(style, LimitOrder) and style.get_limit_price() <= 0:
@@ -64,29 +136,125 @@ def order(id_or_ins, amount, side, position_effect, style):
 
     order_book_id = assure_future_order_book_id(id_or_ins)
     env = Environment.get_instance()
+    if env.config.base.run_type != RUN_TYPE.BACKTEST:
+        if "88" in order_book_id:
+            raise RQInvalidArgument(_(u"Main Future contracts[88] are not supported in paper trading."))
+        if "99" in order_book_id:
+            raise RQInvalidArgument(_(u"Index Future contracts[99] are not supported in paper trading."))
+
     price = env.get_last_price(order_book_id)
+    if np.isnan(price):
+        user_system_log.warn(
+            _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=order_book_id)
+        )
+        return
+
     amount = int(amount)
 
-    r_order = Order.__from_create__(env.calendar_dt, env.trading_dt, order_book_id, amount, side, style,
-                                    position_effect)
+    position = Environment.get_instance().portfolio.positions[order_book_id]
+
+    orders = []
+    if position_effect == POSITION_EFFECT.CLOSE:
+        if side == SIDE.BUY:
+            # 如果平仓量大于持仓量，则 Warning 并 取消订单创建
+            if amount > position.sell_quantity:
+                user_system_log.warn(
+                    _(u"Order Creation Failed: close amount {amount} is larger than position "
+                      u"quantity {quantity}").format(amount=amount, quantity=position.sell_quantity)
+                )
+                return []
+            sell_old_quantity = position.sell_old_quantity
+            if amount > sell_old_quantity:
+                if sell_old_quantity != 0:
+                    # 如果有昨仓，则创建一个 POSITION_EFFECT.CLOSE 的平仓单
+                    orders.append(Order.__from_create__(
+                        order_book_id,
+                        sell_old_quantity,
+                        side,
+                        style,
+                        POSITION_EFFECT.CLOSE
+                    ))
+                # 剩下还有仓位，则创建一个 POSITION_EFFECT.CLOSE_TODAY 的平今单
+                orders.append(Order.__from_create__(
+                    order_book_id,
+                    amount - sell_old_quantity,
+                    side,
+                    style,
+                    POSITION_EFFECT.CLOSE_TODAY
+                ))
+            else:
+                # 创建 POSITION_EFFECT.CLOSE 的平仓单
+                orders.append(Order.__from_create__(
+                    order_book_id,
+                    amount,
+                    side,
+                    style,
+                    POSITION_EFFECT.CLOSE
+                ))
+        else:
+            if amount > position.buy_quantity:
+                user_system_log.warn(
+                    _(u"Order Creation Failed: close amount {amount} is larger than position "
+                      u"quantity {quantity}").format(amount=amount, quantity=position.sell_quantity)
+                )
+                return []
+            buy_old_quantity = position.buy_old_quantity
+            if amount > buy_old_quantity:
+                if buy_old_quantity != 0:
+                    orders.append(Order.__from_create__(
+                        order_book_id,
+                        buy_old_quantity,
+                        side,
+                        style,
+                        POSITION_EFFECT.CLOSE
+                    ))
+                orders.append(Order.__from_create__(
+                    order_book_id,
+                    amount - buy_old_quantity,
+                    side,
+                    style,
+                    POSITION_EFFECT.CLOSE_TODAY
+                ))
+            else:
+                orders.append(Order.__from_create__(
+                    order_book_id,
+                    amount,
+                    side,
+                    style,
+                    POSITION_EFFECT.CLOSE
+                ))
+    else:
+        orders.append(Order.__from_create__(
+            order_book_id,
+            amount,
+            side,
+            style,
+            position_effect
+        ))
 
     if np.isnan(price) or price == 0:
         user_system_log.warn(
             _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=order_book_id))
-        r_order.mark_rejected(
-            _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=order_book_id))
-        return r_order
+        for o in orders:
+            o.mark_rejected(
+                _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=order_book_id))
+        return orders
 
-    if r_order.type == ORDER_TYPE.MARKET:
-        r_order.set_frozen_price(price)
+    for o in orders:
+        if o.type == ORDER_TYPE.MARKET:
+            o.set_frozen_price(price)
+        if env.can_submit_order(o):
+            env.broker.submit_order(o)
 
-    if env.can_submit_order(r_order):
-        env.broker.submit_order(r_order)
-    return r_order
+    # 向前兼容，如果创建的order_list 只包含一个订单的话，直接返回对应的订单，否则返回列表
+    if len(orders) == 1:
+        return orders[0]
+    else:
+        return orders
 
 
 @export_as_api
-def buy_open(id_or_ins, amount, style=MarketOrder()):
+def buy_open(id_or_ins, amount, price=None, style=None):
     """
     买入开仓。
 
@@ -94,6 +262,8 @@ def buy_open(id_or_ins, amount, style=MarketOrder()):
     :type id_or_ins: :class:`~Instrument` object | `str` | List[:class:`~Instrument`] | List[`str`]
 
     :param int amount: 下单手数
+
+    :param float price: 下单价格，默认为None，表示 :class:`~MarketOrder`, 此参数主要用于简化 `style` 参数。
 
     :param style: 下单类型, 默认是市价单。目前支持的订单类型有 :class:`~LimitOrder` 和 :class:`~MarketOrder`
     :type style: `OrderStyle` object
@@ -105,13 +275,13 @@ def buy_open(id_or_ins, amount, style=MarketOrder()):
     .. code-block:: python
 
         #以价格为3500的限价单开仓买入2张上期所AG1607合约：
-        buy_open('AG1607', amount=2, style=LimitOrder(3500))
+        buy_open('AG1607', amount=2, price=3500))
     """
-    return order(id_or_ins, amount, SIDE.BUY, POSITION_EFFECT.OPEN, style)
+    return order(id_or_ins, amount, SIDE.BUY, POSITION_EFFECT.OPEN, cal_style(price, style))
 
 
 @export_as_api
-def buy_close(id_or_ins, amount, style=MarketOrder()):
+def buy_close(id_or_ins, amount, price=None, style=None, close_today=False):
     """
     平卖仓
 
@@ -120,10 +290,14 @@ def buy_close(id_or_ins, amount, style=MarketOrder()):
 
     :param int amount: 下单手数
 
+    :param float price: 下单价格，默认为None，表示 :class:`~MarketOrder`, 此参数主要用于简化 `style` 参数。
+
     :param style: 下单类型, 默认是市价单。目前支持的订单类型有 :class:`~LimitOrder` 和 :class:`~MarketOrder`
     :type style: `OrderStyle` object
+    
+    :param bool close_today: 是否指定发平进仓单，默认为False，发送平仓单
 
-    :return: :class:`~Order` object
+    :return: :class:`~Order` object | list[:class:`~Order`]
 
     :example:
 
@@ -132,11 +306,12 @@ def buy_close(id_or_ins, amount, style=MarketOrder()):
         #市价单将现有IF1603空仓买入平仓2张：
         buy_close('IF1603', 2)
     """
-    return order(id_or_ins, amount, SIDE.BUY, POSITION_EFFECT.CLOSE, style)
+    position_effect = POSITION_EFFECT.CLOSE_TODAY if close_today else POSITION_EFFECT.CLOSE
+    return order(id_or_ins, amount, SIDE.BUY, position_effect, cal_style(price, style))
 
 
 @export_as_api
-def sell_open(id_or_ins, amount, style=MarketOrder()):
+def sell_open(id_or_ins, amount, price=None, style=None):
     """
     卖出开仓
 
@@ -145,16 +320,18 @@ def sell_open(id_or_ins, amount, style=MarketOrder()):
 
     :param int amount: 下单手数
 
+    :param float price: 下单价格，默认为None，表示 :class:`~MarketOrder`, 此参数主要用于简化 `style` 参数。
+
     :param style: 下单类型, 默认是市价单。目前支持的订单类型有 :class:`~LimitOrder` 和 :class:`~MarketOrder`
     :type style: `OrderStyle` object
 
     :return: :class:`~Order` object
     """
-    return order(id_or_ins, amount, SIDE.SELL, POSITION_EFFECT.OPEN, style)
+    return order(id_or_ins, amount, SIDE.SELL, POSITION_EFFECT.OPEN, cal_style(price, style))
 
 
 @export_as_api
-def sell_close(id_or_ins, amount, style=MarketOrder()):
+def sell_close(id_or_ins, amount, price=None, style=None, close_today=False):
     """
     平买仓
 
@@ -163,12 +340,17 @@ def sell_close(id_or_ins, amount, style=MarketOrder()):
 
     :param int amount: 下单手数
 
+    :param float price: 下单价格，默认为None，表示 :class:`~MarketOrder`, 此参数主要用于简化 `style` 参数。
+
     :param style: 下单类型, 默认是市价单。目前支持的订单类型有 :class:`~LimitOrder` 和 :class:`~MarketOrder`
     :type style: `OrderStyle` object
 
-    :return: :class:`~Order` object
+    :param bool close_today: 是否指定发平进仓单，默认为False，发送平仓单
+
+    :return: :class:`~Order` object | list[:class:`~Order`]
     """
-    return order(id_or_ins, amount, SIDE.SELL, POSITION_EFFECT.CLOSE, style)
+    position_effect = POSITION_EFFECT.CLOSE_TODAY if close_today else POSITION_EFFECT.CLOSE
+    return order(id_or_ins, amount, SIDE.SELL, position_effect, cal_style(price, style))
 
 
 def assure_future_order_book_id(id_or_symbols):

@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 import six
 import os
-import ruamel.yaml as yaml
+import yaml
 import simplejson as json
 import datetime
 import logbook
@@ -35,12 +36,14 @@ from ..utils.py2 import to_utf8
 from ..mod.utils import mod_config_value_parse
 
 
+default_dir_path = os.path.abspath(os.path.expanduser('~/.rqalpha'))
+
+
 def load_config(config_path, loader=yaml.Loader):
     if config_path is None:
         return {}
     if not os.path.exists(config_path):
-        system_log.error(_(u"config.yml not found in {config_path}").format(config_path))
-        return False
+        raise RuntimeError(_(u"config.yml not found in {config_path}").format(config_path))
     if ".json" in config_path:
         with codecs.open(config_path, encoding="utf-8") as f:
             json_config = f.read()
@@ -51,7 +54,7 @@ def load_config(config_path, loader=yaml.Loader):
     return config
 
 
-def dump_config(config_path, config, dumper=yaml.RoundTripDumper):
+def dump_config(config_path, config, dumper=yaml.Dumper):
     with codecs.open(config_path, mode='w', encoding='utf-8') as stream:
         stream.write(to_utf8(yaml.dump(config, Dumper=dumper)))
 
@@ -68,7 +71,7 @@ def load_mod_config(config_path, loader=yaml.Loader):
 
 
 def get_mod_config_path(generate=False):
-    mod_config_path = os.path.abspath(os.path.expanduser("~/.rqalpha/mod_config.yml"))
+    mod_config_path = os.path.join(default_dir_path, "mod_config.yml")
     mod_template_path = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../mod_config_template.yml"))
     if not os.path.exists(mod_config_path):
         if generate:
@@ -126,7 +129,7 @@ def set_locale(lc):
     localization.set_locale([lc])
 
 
-def parse_config(config_args, config_path=None, click_type=True, source_code=None):
+def parse_config(config_args, config_path=None, click_type=False, source_code=None, user_funcs=None, verify_config=True):
     mod_configs = config_args.pop("mod_configs", [])
     for cfg, value in mod_configs:
         key = "mod__{}".format(cfg.replace(".", "__"))
@@ -165,7 +168,8 @@ def parse_config(config_args, config_path=None, click_type=True, source_code=Non
         deep_update(config_args, config)
 
     # config from user code
-    config = parse_user_config_from_code(config, source_code)
+    if user_funcs is None:
+        config = parse_user_config_from_code(config, source_code)
     config = RqAttrDict(config)
 
     base_config = config.base
@@ -183,7 +187,7 @@ def parse_config(config_args, config_path=None, click_type=True, source_code=Non
         base_config.end_date = base_config.end_date.date()
 
     if base_config.data_bundle_path is None:
-        base_config.data_bundle_path = os.path.expanduser("~/.rqalpha")
+        base_config.data_bundle_path = default_dir_path
 
     base_config.data_bundle_path = os.path.abspath(base_config.data_bundle_path)
 
@@ -191,15 +195,9 @@ def parse_config(config_args, config_path=None, click_type=True, source_code=Non
         base_config.data_bundle_path = os.path.join(base_config.data_bundle_path, "./bundle")
 
     if not os.path.exists(base_config.data_bundle_path):
-        system_log.error(
+        raise RuntimeError(
             _(u"data bundle not found in {bundle_path}. Run `rqalpha update_bundle` to download data bundle.").format(
                 bundle_path=base_config.data_bundle_path))
-        return
-
-    if source_code is None and not os.path.exists(base_config.strategy_file):
-        system_log.error(
-            _(u"strategy file not found in {strategy_file}").format(strategy_file=base_config.strategy_file))
-        return
 
     base_config.run_type = parse_run_type(base_config.run_type)
     base_config.account_list = parse_account_list(base_config.securities)
@@ -214,15 +212,6 @@ def parse_config(config_args, config_path=None, click_type=True, source_code=Non
         if isinstance(extra_config.context_vars, six.string_types):
             extra_config.context_vars = json.loads(to_utf8(extra_config.context_vars))
 
-    if base_config.stock_starting_cash < 0:
-        raise patch_user_exc(ValueError(_(u"invalid stock starting cash: {}").format(base_config.stock_starting_cash)))
-
-    if base_config.future_starting_cash < 0:
-        raise patch_user_exc(ValueError(_(u"invalid future starting cash: {}").format(base_config.future_starting_cash)))
-
-    if base_config.stock_starting_cash + base_config.future_starting_cash == 0:
-        raise patch_user_exc(ValueError(_(u"stock starting cash and future starting cash can not be both 0.")))
-
     system_log.level = getattr(logbook, extra_config.log_level.upper(), logbook.NOTSET)
     std_log.level = getattr(logbook, extra_config.log_level.upper(), logbook.NOTSET)
     user_log.level = getattr(logbook, extra_config.log_level.upper(), logbook.NOTSET)
@@ -231,7 +220,17 @@ def parse_config(config_args, config_path=None, click_type=True, source_code=Non
     if base_config.frequency == "1d":
         logger.DATETIME_FORMAT = "%Y-%m-%d"
 
-    system_log.debug("\n" + pformat(config))
+    if verify_config:
+        if base_config.stock_starting_cash < 0:
+            raise patch_user_exc(ValueError(_(u"invalid stock starting cash: {}").format(base_config.stock_starting_cash)))
+
+        if base_config.future_starting_cash < 0:
+            raise patch_user_exc(ValueError(_(u"invalid future starting cash: {}").format(base_config.future_starting_cash)))
+
+        if base_config.stock_starting_cash + base_config.future_starting_cash == 0:
+            raise patch_user_exc(ValueError(_(u"stock starting cash and future starting cash can not be both 0.")))
+
+    system_log.debug("\n" + pformat(config.convert_to_dict()))
 
     return config
 
@@ -255,14 +254,23 @@ def parse_user_config_from_code(config, source_code=None):
             deep_update(sub_dict, config[sub_key])
 
     except Exception as e:
-        system_log.error(_(u"in parse_user_config, exception: {e}").format(e=e))
+        raise RuntimeError(_(u"in parse_user_config, exception: {e}").format(e=e))
     finally:
         return config
 
 
 def parse_account_list(securities):
+    security_set = set()
     if isinstance(securities, (tuple, list)):
-        return [ACCOUNT_TYPE[security.upper()] for security in securities]
+        for security in securities:
+            if "_" in security:
+                for s in security.split("_"):
+                    security_set.add(s)
+            else:
+                security_set.add(security)
+        if len(security_set) == 0:
+            raise RuntimeError(_(u"securities can not be empty, using `--security stock/future` to specific security type"))
+        return [ACCOUNT_TYPE[security.upper()] for security in security_set]
     elif isinstance(securities, six.string_types):
         return [ACCOUNT_TYPE[securities.upper()]]
     else:

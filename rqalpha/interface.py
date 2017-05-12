@@ -26,13 +26,12 @@ class AbstractStrategyLoader(with_metaclass(abc.ABCMeta)):
     在扩展模块中，可以通过调用 ``env.set_strategy_loader`` 来替换默认的策略加载器。
     """
     @abc.abstractmethod
-    def load(self, strategy, scope):
+    def load(self, scope):
         """
         [Required]
 
         load 函数负责组装策略代码和策略代码所在的域，并输出最终组装好的可执行域。
 
-        :param str strategy: 策略标识符，对应 ``config.base.strategy_file``，相应的命令行参数为 ``-f``。
         :param dict scope: 策略代码运行环境，在传入时，包含了所有基础API。
             通过在 scope 中添加函数可以实现自定义API；通过覆盖 scope 中相应的函数，可以覆盖原API。
 
@@ -264,13 +263,20 @@ class AbstractDataSource(object):
         """
         raise NotImplementedError
 
-    def get_future_info(self, instrument, hedge_type):
+    def get_margin_info(self, instrument):
         """
-        获取期货合约手续费、保证金等数据
-
-        :param instrument: 合约对象
-        :param HEDGE_TYPE hedge_type: 枚举类型，账户对冲类型
+        获取合约的保证金数据
+        
+        :param instrument: 合约对象 
         :return: dict
+        """
+        raise NotImplementedError
+
+    def get_commission_info(self, instrument):
+        """
+        获取合约的手续费信息
+        :param instrument: 
+        :return: 
         """
         raise NotImplementedError
 

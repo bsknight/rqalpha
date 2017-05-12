@@ -26,21 +26,28 @@ from ...utils.logger import user_system_log
 
 def margin_of(order_book_id, quantity, price):
     env = Environment.get_instance()
-    contract_multiplier = env.get_instrument(order_book_id).contract_multiplier
-    margin_rate = env.get_future_margin_rate(order_book_id)
+    margin_info = env.data_proxy.get_margin_info(order_book_id)
     margin_multiplier = env.config.base.margin_multiplier
-    return quantity * price * margin_multiplier * margin_rate * contract_multiplier
+    margin_rate = margin_info['long_margin_ratio'] * margin_multiplier
+    contract_multiplier = env.get_instrument(order_book_id).contract_multiplier
+    return quantity * contract_multiplier * price * margin_rate
 
 
 class FutureAccount(BaseAccount):
+
+    __abandon_properties__ = [
+        "daily_holding_pnl",
+        "daily_realized_pnl"
+    ]
+
     def register_event(self):
         event_bus = Environment.get_instance().event_bus
-        event_bus.add_listener(EVENT.SETTLEMENT, self._settlement)
-        event_bus.add_listener(EVENT.ORDER_PENDING_NEW, self._on_order_pending_new)
-        event_bus.add_listener(EVENT.ORDER_CREATION_REJECT, self._on_order_creation_reject)
-        event_bus.add_listener(EVENT.ORDER_CANCELLATION_PASS, self._on_order_unsolicited_update)
-        event_bus.add_listener(EVENT.ORDER_UNSOLICITED_UPDATE, self._on_order_unsolicited_update)
-        event_bus.add_listener(EVENT.TRADE, self._on_trade)
+        event_bus.prepend_listener(EVENT.SETTLEMENT, self._settlement)
+        event_bus.prepend_listener(EVENT.ORDER_PENDING_NEW, self._on_order_pending_new)
+        event_bus.prepend_listener(EVENT.ORDER_CREATION_REJECT, self._on_order_creation_reject)
+        event_bus.prepend_listener(EVENT.ORDER_CANCELLATION_PASS, self._on_order_unsolicited_update)
+        event_bus.prepend_listener(EVENT.ORDER_UNSOLICITED_UPDATE, self._on_order_unsolicited_update)
+        event_bus.prepend_listener(EVENT.TRADE, self._on_trade)
 
     def fast_forward(self, orders, trades=list()):
         # 计算 Positions
@@ -145,7 +152,6 @@ class FutureAccount(BaseAccount):
         for position in list(self._positions.values()):
             order_book_id = position.order_book_id
             if position.is_de_listed() and position.buy_quantity + position.sell_quantity != 0:
-                self._total_cash += position.market_value * position.margin_rate
                 user_system_log.warn(
                     _(u"{order_book_id} is expired, close all positions by system").format(order_book_id=order_book_id))
                 del self._positions[order_book_id]
