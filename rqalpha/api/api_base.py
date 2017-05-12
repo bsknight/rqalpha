@@ -48,7 +48,9 @@ from ..model.instrument import Instrument, SectorCode as sector_code, IndustryCo
 # noinspection PyUnresolvedReferences
 from ..const import EXECUTION_PHASE, EXC_TYPE, ORDER_STATUS, SIDE, POSITION_EFFECT, ORDER_TYPE, MATCHING_TYPE, RUN_TYPE
 # noinspection PyUnresolvedReferences
-from ..model.order import Order, MarketOrder, LimitOrder
+from ..model.order import Order, MarketOrder, LimitOrder, OrderStyle
+# noinspection PyUnresolvedReferences
+from ..events import EVENT
 
 
 __all__ = [
@@ -63,6 +65,7 @@ __all__ = [
     'ORDER_TYPE',
     'RUN_TYPE',
     'MATCHING_TYPE',
+    'EVENT',
 ]
 
 
@@ -132,6 +135,22 @@ def assure_order_book_id(id_or_ins):
         raise RQInvalidArgument(_(u"unsupported order_book_id type"))
 
     return order_book_id
+
+
+def cal_style(price, style):
+    if price is None and style is None:
+        return MarketOrder()
+
+    if style is not None:
+        if not isinstance(style, OrderStyle):
+            raise RuntimeError
+        return style
+
+    if isinstance(price, OrderStyle):
+        # 为了 order_xxx('RB1710', 10, MarketOrder()) 这种写法
+        return price
+
+    return LimitOrder(price)
 
 
 @export_as_api
@@ -446,6 +465,10 @@ def all_instruments(type=None, date=None):
 
     :param str type: 需要查询合约类型，例如：type='CS'代表股票。默认是所有类型
 
+    :param date: 查询时间点
+    :type date: `str` | `datetime` | `date`
+
+
     :return: `pandas DataFrame` 所有合约的基本信息。
 
     其中type参数传入的合约类型和对应的解释如下：
@@ -484,12 +507,11 @@ def all_instruments(type=None, date=None):
 
     """
     env = Environment.get_instance()
-    current_date = env.trading_dt
-
     if date is None:
-        date = current_date
+        dt = env.trading_dt
     else:
-        date = min(pd.Timestamp(date).to_pydatetime(), current_date)
+        dt = pd.Timestamp(date).to_pydatetime()
+        dt = min(dt, env.trading_dt)
 
     if type is not None:
         if isinstance(type, six.string_types):
@@ -506,8 +528,8 @@ def all_instruments(type=None, date=None):
     else:
         types = None
 
-    result = [i for i in env.data_proxy.all_instruments(types, date)
-              if i.type != 'CS' or not env.data_proxy.is_suspended(i.order_book_id, date)]
+    result = [i for i in env.data_proxy.all_instruments(types, dt)
+              if i.type != 'CS' or not env.data_proxy.is_suspended(i.order_book_id, dt)]
     if types is not None and len(types) == 1:
         return pd.DataFrame([i.__dict__ for i in result])
 
@@ -745,8 +767,8 @@ def get_dividend(order_book_id, start_date, *args, **kwargs):
     if df is None:
         return None
 
-    sd = start_date.year*10000 + start_date.month*100 + start_date.day
-    ed = dt.year*10000 + dt.month*100 + dt.day
+    sd = start_date.year * 10000 + start_date.month * 100 + start_date.day
+    ed = dt.year * 10000 + dt.month * 100 + dt.day
     return df[(df['announcement_date'] >= sd) & (df['announcement_date'] <= ed)]
 
 

@@ -2,6 +2,130 @@
 CHANGELOG
 ==================
 
+2.2.4
+==================
+
+- 所有的下单函数进行了扩展，扩展如下:
+
+.. code-block:: python
+
+  # 以 order_shares 举例，其他的下单函数同理。
+  # 原本的下单方式: 以 200 元的价格下单 100 股 000001.XSHE
+  order_shares("000001.XSHE", 100, style=LimitOrder(200))
+  # 下单的如下方式都OK:
+  order_shares("000001.XSHE", 100, 200)
+  order_shares("000001.XSHE", 100, LimitOrder(200))
+  order_shares("000001.XSHE", 100, price=200)
+  order_shares("000001.XSHE", 100, style=LimitOrder(200))
+
+- :code:`buy_close` 和 :code:`sell_close` API 增加 :code:`close_today` 参数，现在您现在可以指定发平今单了。
+- Breaking Chnage: 原本期货中的 :code:`buy_close` 和 :code:`sell_close` API 返回的 :code:`Order` 对象。但实际交易过程中，涉及到昨仓今仓的时候，可能会存在发单被拒单的情况，RQAlpha 进行平昨/平今智能拆单的处理，因此在一些情况下会生成多个订单，对应也会返回一个订单列表。期货平仓更新的内容请参考 `Issue 116 <https://github.com/ricequant/rqalpha/issues/116>`_
+- Breaking Change: 取消 :code:`Order` | :code:`Trade` 对应的 :code:`__from_create__` 函数中 :code:`calendar_dt` 和 :code:`trading_dt` 的传入，对接第三方交易源，构建订单和成交的 Mod 可能会产生影响，需要进行修改.
+
+.. code-block:: python
+
+  # 原先的构建方式
+  Order.__from_create__(
+    calendar_dt,
+    trading_dt,
+    order_book_id,
+    amount,
+    side,
+    style,
+    position_effect
+  )
+  #修改为
+  Order.__from_create__(
+    order_book_id,
+    amount,
+    side,
+    style,
+    position_effect
+  )
+
+- `iPython` 更新至 6.0 版本以后不再支持 `Python 2.x` 导致在 `Python 2.x` 下安装RQAlpha 因为 `line-profiler` 依赖 `iPython` 的缘故而报错。目前增加了在 `Python 2.x` 下依赖 `iPython 5.3.0` 版本解决此问题。
+- 不再提供 `rqalpha-cmd` 命令的扩展和注入，目前只有一个 entry point: `rqalpha` 第三方 Mod 可以扩展 `rqalpha` 命令。
+- 增加 :code:`from rqalpha import subscribe_event` 来支持事件订阅(暂时不增加到API中，您如果想在策略里使用，也需要主动 import 该函数), 如下示例所示:
+
+.. code-block:: python
+
+  from rqalpha.api import *
+  from rqalpha import subscribe_event
+
+
+  def on_trade_handler(event):
+      trade = event.trade
+      order = event.order
+      account = event.account
+      logger.info("*" * 10 + "Trade Handler" + "*" * 10)
+      logger.info(trade)
+      logger.info(order)
+      logger.info(account)
+
+
+  def on_order_handler(event):
+      order = event.order
+      logger.info("*" * 10 + "Order Handler" + "*" * 10)
+      logger.info(order)
+
+
+  def init(context):
+      logger.info("init")
+      context.s1 = "000001.XSHE"
+      update_universe(context.s1)
+      context.fired = False
+      subscribe_event(EVENT.TRADE, on_trade_handler)
+      subscribe_event(EVENT.ORDER_CREATION_PASS, on_order_handler)
+
+
+  def before_trading(context):
+      pass
+
+
+  def handle_bar(context, bar_dict):
+      if not context.fired:
+          order_percent(context.s1, 1)
+          context.fired = True
+
+  # rqalpha run -f ./rqalpha/examples/subscribe_event.py -s 2016-06-01 -e 2016-12-01 --stock-starting-cash 100000 --benchmark 000300.XSHG
+
+- `sys_stock_realtime` 提供了一个行情下载服务，启动该服务，会实时往 redis 中写入全市场股票行情数据。多个 RQAlpha 可以连接该 redis 获取实时盘口数据，就不需要重复获取数据。详情参考文档 `sys stock realtime mod README <https://github.com/ricequant/rqalpha/blob/master/rqalpha/mod/rqalpha_mod_sys_stock_realtime/README.rst>`_
+- 解决期货策略持仓到交割导致可用资金计算不准确的问题
+- 解决 `--plot` 时候会报错退出的问题
+
+
+2.2.2
+==================
+
+- 增加 :code:`run_file` | :code:`run_code` | :code:`run_func` API, 详情请参见 `多种方式运行策略 <http://rqalpha.io/zh_CN/latest/intro/run_algorithm.html>`_
+- Breaking Change: 更改 :code:`AbstractStrategyLoader:load` 函数的传入参数，现在不需要 :code:`strategy` 了。
+- 增加 :code:`UserFuncStrategyLoader` 类
+- 根据 `Issue 116 <https://github.com/ricequant/rqalpha/issues/116>`_ 增加如下内容:
+
+  - :code:`POSITION_EFFECT` 增加 :code:`CLOSE_TODAY` 类型
+  - 增加调仓函数 :code:`order(order_book_id, quantity, price=None)` API
+
+    - 如果不传入 price 则认为执行的是 MarketOrder 类型订单，否则下 LimitOrder 订单
+    - 期货
+
+      - quantity > 0: 往 BUY 方向调仓 quantity 手
+      - quantity < 0: 往 SELL 方向调仓 quantity 手
+
+    - 股票
+
+      - 相当于 order_shares 函数
+
+  - 增加调仓函数 :code:`order_to(order_book_id, quantity, price=None)` API
+
+    - 基本逻辑和 :code:`order` 函数一致
+    - 区别在于 quantity 表示调仓对应的最终仓位
+
+  - 现有所有下单函数，增加 `price` option，具体行为和 :code:`order` | :code:`order_to` 一致
+
+- Fix bug in :code:`all_instruments` `PR 123 <https://github.com/ricequant/rqalpha/pull/123>`_
+- Fix "运行不满一天的情况下 sys_analyser 报 KeyError" `PR 118 <https://github.com/ricequant/rqalpha/pull/118>`_
+- sys_analyser 生成 report 对应的字段进行调整，具体调整内容请查看 commit `d9d19f <https://github.com/ricequant/rqalpha/commit/f6e4c24fde2f086cc09b45b2cc4d2cfe0cd9d19f>`_
+
 2.2.0
 ==================
 
