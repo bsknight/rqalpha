@@ -28,7 +28,7 @@ from rqalpha.utils import rq_json
 from rqalpha.utils.i18n import gettext as _
 from .utils import get_realtime_quotes, is_holiday_today, is_tradetime_now
 from . import data_board
-
+import pandas as pd
 
 class RealtimeEventSource(AbstractEventSource):
     MARKET_DATA_EVENT = "RealtimeEventSource.MARKET_DATA_EVENT"
@@ -66,7 +66,10 @@ class RealtimeEventSource(AbstractEventSource):
     def quotation_worker(self):
         while True:
             if not is_holiday_today() and is_tradetime_now():
-                order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments("CS", self._env.trading_dt)])
+                
+                types = set(["CS","ETF","FenjiA","FenjiB","FenjiMu"])
+                order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)])
+                
                 try:
                     data_board.realtime_quotes_df = get_realtime_quotes(order_book_id_list)
                 except Exception as e:
@@ -77,14 +80,31 @@ class RealtimeEventSource(AbstractEventSource):
 
     def clock_worker(self):
         data_proxy = self._env.data_proxy
-
         while True:
+            ready = True
+            types = set(["CS","ETF","FenjiA","FenjiB","FenjiMu"])
+            order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)])
+            #order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments("CS", self._env.trading_dt)])
+            #print len(order_book_id_list)
+            for order_book_id in order_book_id_list:
+                #if data_proxy.current_snapshot(order_book_id, None, None).datetime.date() != datetime.date.today():
+                if data_proxy.current_snapshot(order_book_id, None, None).datetime.date() is None:
+                    #print data_proxy.current_snapshot(order_book_id, None, None).datetime.date()
+                    #print order_book_id
+                    ready = False
+                    break;
+            if ready:
+                #if data_proxy.current_snapshot("000001.XSHG", None, None).datetime.date() == datetime.date.today():
+                system_log.info(_("Market data is ready, start to work now!"))
+                break
+            time.sleep(0.1)
+            '''
             # wait for the first data ready
             if data_proxy.current_snapshot("000001.XSHG", None, None).datetime.date() == datetime.date.today():
                 system_log.info(_("Market data is ready, start to work now!"))
                 break
             time.sleep(0.1)
-
+            '''
         while True:
             time.sleep(self.fps)
 

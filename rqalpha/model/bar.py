@@ -21,6 +21,7 @@ from ..execution_context import ExecutionContext
 from ..environment import Environment
 from ..const import RUN_TYPE
 from ..utils.datetime_func import convert_int_to_datetime
+from ..utils.datetime_func import convert_dt_to_int
 from ..utils.i18n import gettext as _
 from ..utils.logger import system_log
 from ..utils.exception import patch_user_exc
@@ -203,7 +204,10 @@ class BarObject(object):
     def datetime(self):
         if self._dt is not None:
             return self._dt
-        return convert_int_to_datetime(self._data['datetime'])
+
+        return self._data['datetime']
+        #error when use mod_stock_realtime because datetime is str in this mod
+        #return convert_int_to_datetime(self._data['datetime'])
 
     @property
     def instrument(self):

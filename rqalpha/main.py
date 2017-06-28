@@ -51,6 +51,8 @@ from .utils.persisit_helper import CoreObjectsPersistProxy, PersistHelper
 from .utils.scheduler import Scheduler
 from .utils.config import set_locale, default_dir_path
 
+from rqalpha.const import RUN_TYPE, PERSIST_MODE
+
 
 jsonpickle_numpy.register_handlers()
 
@@ -227,8 +229,11 @@ def run(config, source_code=None, user_funcs=None):
         ctx = ExecutionContext(const.EXECUTION_PHASE.GLOBAL)
         ctx._push()
 
-        # FIXME
-        start_dt = datetime.datetime.combine(config.base.start_date, datetime.datetime.min.time())
+        if env.config.base.run_type in (RUN_TYPE.PAPER_TRADING, RUN_TYPE.LIVE_TRADING): 
+            start_dt = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
+        else:    
+            # FIXME
+            start_dt = datetime.datetime.combine(config.base.start_date, datetime.datetime.min.time())
         env.calendar_dt = start_dt
         env.trading_dt = start_dt
 

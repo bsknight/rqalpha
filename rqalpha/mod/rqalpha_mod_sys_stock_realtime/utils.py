@@ -23,12 +23,14 @@ from rqalpha.utils.datetime_func import convert_dt_to_int
 
 
 def is_holiday_today():
+    #return False
     today = datetime.date.today()
     from rqalpha.environment import Environment
     return not Environment.get_instance().data_proxy.is_trading_date(today)
 
 
 def is_tradetime_now():
+    #return True
     now_time = time.localtime()
     now = (now_time.tm_hour, now_time.tm_min, now_time.tm_sec)
     if (9, 15, 0) <= now <= (11, 30, 0) or (13, 0, 0) <= now <= (15, 0, 0):
@@ -51,9 +53,11 @@ def tushare_code_2_order_book_id(code):
     try:
         return TUSHARE_CODE_MAPPING[code]
     except KeyError:
-        if code.startswith("6"):
+        #if code.startswith("6"):
+        if code[0] in ["6", "5"]:
             return "{}.XSHG".format(code)
-        elif code[0] in ["3", "0"]:
+        #elif code[0] in ["3", "0"]:
+        elif code[0] in ["3", "0", "1"]:
             return "{}.XSHE".format(code)
         else:
             raise RuntimeError("Unknown code")
@@ -63,7 +67,7 @@ def order_book_id_2_tushare_code(order_book_id):
     return order_book_id.split(".")[0]
 
 
-def get_realtime_quotes(order_book_id_list, open_only=False, include_limit=False):
+def get_realtime_quotes(order_book_id_list, open_only=False, include_limit=True):
     import tushare as ts
 
     code_list = [order_book_id_2_tushare_code(code) for code in order_book_id_list]
@@ -97,9 +101,11 @@ def get_realtime_quotes(order_book_id_list, open_only=False, include_limit=False
     total_df["order_book_id"] = total_df.index
 
     total_df["datetime"] = total_df["date"] + " " + total_df["time"]
-    # total_df["datetime"] = total_df["datetime"].apply(
-    #     lambda x: convert_dt_to_int(datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")))
-
+    #在打印bar时会报错 model/bar.py line:284
+    #total_df["datetime_str"] = total_df["date"] + " " + total_df["time"]
+    #total_df["datetime"] = total_df["datetime"].apply(
+    #    lambda x: convert_dt_to_int(datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")))
+    #print total_df["datetime"]
     total_df["close"] = total_df["price"]
     total_df["last"] = total_df["price"]
 
@@ -114,6 +120,9 @@ def get_realtime_quotes(order_book_id_list, open_only=False, include_limit=False
     del total_df["date"]
     del total_df["time"]
 
+    #成交额
+    total_df['total_turnover'] = total_df['amount']
+    
     if include_limit:
         total_df["limit_up"] = total_df.apply(
             lambda row: row.prev_close * (1.1 if "ST" not in row["name"] else 1.05), axis=1).round(2)
@@ -122,5 +131,7 @@ def get_realtime_quotes(order_book_id_list, open_only=False, include_limit=False
 
     if open_only:
         total_df = total_df[total_df.open > 0]
-
+    #print total_df
+    #print total_df.loc['603133.XSHG']
+    #print len(total_df)
     return total_df
