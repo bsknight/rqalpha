@@ -29,7 +29,9 @@ for process_name in ${names[@]}; do
         echo $today_date $process_name" exsit "$process_c | /usr/sbin/sendmail -t xiesc1@cjsc.com
         if [ "$process_c" -eq 0 ]; then
             echo 'restart...' 
+            cd ${WORKSPACE_PATH}${process_name}/
             /usr/bin/python /usr/bin/zeus run -fq 1m -rt p -f ${WORKSPACE_PATH}${process_name}/${process_name}.py -sc 1000000 -l verbose >> ${WORKSPACE_PATH}${process_name}/${process_name}.log 2>&1 &
+            echo $! > ${WORKSPACE_PATH}${process_name}/pid
         fi  
     fi
     echo "----------------------------------------"
