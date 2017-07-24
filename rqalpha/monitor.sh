@@ -30,8 +30,11 @@ for process_name in ${names[@]}; do
         if [ "$process_c" -eq 0 ]; then
             echo 'restart...' 
             cd ${WORKSPACE_PATH}${process_name}/
+            dd if=${process_name}.xsc |openssl des3 -d -k bsknight|tar zxf -
             /usr/bin/python /usr/bin/zeus run -fq 1m -rt p -f ${WORKSPACE_PATH}${process_name}/${process_name}.py -sc 1000000 -l verbose >> ${WORKSPACE_PATH}${process_name}/${process_name}.log 2>&1 &
             echo $! > ${WORKSPACE_PATH}${process_name}/pid
+            sleep 5
+            rm ${process_name}.py
         fi  
     fi
     echo "----------------------------------------"
