@@ -24,6 +24,11 @@ find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "*.log" | xargs rm -rf
 find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "pid" | xargs rm -rf
 find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "persist" | xargs rm -rf
 
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/ffe
+tar -zcvf - ./ffe.py|openssl des3 -salt -k bsknight| dd of=ffe.xsc
+rm ./persist -rf
+rm *.pyc
+
 cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/ffp
 tar -zcvf - ./ffp.py|openssl des3 -salt -k bsknight| dd of=ffp.xsc
 rm ./persist -rf
