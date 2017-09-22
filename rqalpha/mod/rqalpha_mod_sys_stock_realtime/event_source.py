@@ -68,7 +68,7 @@ class RealtimeEventSource(AbstractEventSource):
             if not is_holiday_today() and is_tradetime_now():
                 
                 types = set(["CS","ETF","FenjiA","FenjiB","FenjiMu"])
-                order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)])
+                order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)]+['399678.XSHE'])
                 
                 try:
                     data_board.realtime_quotes_df = get_realtime_quotes(order_book_id_list)
@@ -83,7 +83,7 @@ class RealtimeEventSource(AbstractEventSource):
         while True:
             ready = True
             types = set(["CS","ETF","FenjiA","FenjiB","FenjiMu"])
-            order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)])
+            order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments(types, self._env.trading_dt)]+['399678.XSHE'])
             #order_book_id_list = sorted([instruments.order_book_id for instruments in self._env.data_proxy.all_instruments("CS", self._env.trading_dt)])
             #print len(order_book_id_list)
             for order_book_id in order_book_id_list:

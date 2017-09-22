@@ -14,7 +14,7 @@ export NLS_DATE_FORMAT='YYYY-MM-DD'
 
 WORKSPACE_PATH='/home/workspace/rqalpha/rqalpha/zeus/'
 LOCAL_IP='172.16.50.141'
-names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe')
+names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe' 'cixincap')
 #names=('ffp' 'ffr' 'peg')
 
 echo "========================================"
@@ -25,9 +25,12 @@ for process_name in ${names[@]}; do
     if [ "$process_c" -eq 1 ]; then
         echo "process OK"
     else 
-        today_date=`date +%Y%m%d%H%M%S`
-        echo $today_date $process_name" exsit "$process_c
-        (echo "Subject: $LOCAL_IP";echo $today_date $process_name" exsit "$process_c) | /usr/sbin/sendmail -t xiesc1@cjsc.com
+        now=`date +%H%M`
+        if [[ "$now" != "0845" && "$now" != "0846" ]]; then
+            today_date=`date +%Y%m%d%H%M%S`
+            echo $today_date $process_name" exsit "$process_c
+            (echo "Subject: $LOCAL_IP";echo $today_date $process_name" exsit "$process_c) | /usr/sbin/sendmail -t xiesc1@cjsc.com
+        fi
         if [ "$process_c" -eq 0 ]; then
             echo 'restart...' 
             cd ${WORKSPACE_PATH}${process_name}/

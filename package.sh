@@ -17,12 +17,18 @@ rm ./.git/ -rf
 rm ./.github/ -rf
 
 cd $WORKPATH/pkg/rqalpha
+rm general.conf
 find ./ -name "*.py" | xargs python -m py_compile 
 find ./ -name "*.py.swp" | xargs rm -rf
 find ./ -name "tags" | xargs rm -rf
 find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "*.log" | xargs rm -rf
 find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "pid" | xargs rm -rf
 find $WORKPATH/pkg/rqalpha/rqalpha/zeus -name "persist" | xargs rm -rf
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/cixincap
+tar -zcvf - ./cixincap.py|openssl des3 -salt -k bsknight| dd of=cixincap.xsc
+rm ./persist -rf
+rm *.pyc
 
 cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/ffe
 tar -zcvf - ./ffe.py|openssl des3 -salt -k bsknight| dd of=ffe.xsc
