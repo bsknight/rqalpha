@@ -14,7 +14,7 @@ export NLS_DATE_FORMAT='YYYY-MM-DD'
 
 WORKSPACE_PATH='/home/workspace/rqalpha/rqalpha/zeus/'
 LOCAL_IP='172.16.50.141'
-names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe' 'cixincap')
+names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe' 'cixincap' 'ffe_bak')
 #names=('ffp' 'ffr' 'peg')
 
 echo "========================================"

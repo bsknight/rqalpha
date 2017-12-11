@@ -60,6 +60,11 @@ tar -zcvf - ./grcxhs.py|openssl des3 -salt -k bsknight| dd of=grcxhs.xsc
 rm ./persist -rf
 rm *.pyc
 
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/ffe_bak
+tar -zcvf - ./ffe_bak.py|openssl des3 -salt -k bsknight| dd of=ffe_bak.xsc
+rm ./persist -rf
+rm *.pyc
+
 cd $WORKPATH/pkg/rqalpha
 find ./ -name "*.py" | xargs rm -rf
 
