@@ -7,15 +7,16 @@
 #export TNS_ADMIN=$ORACLE_HOME/network/admin
 #export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ORACLE_HOME/lib
 #export PATH=$PATH:$ORACLE_HOME/bin:/usr/local/lib/:$JAVA_HOME/bin:$JRE_HOME/bin
-export PATH=$PATH:/usr/local/lib/:/usr/lib:/usr/lib64/
-export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/oracle/12.1/client64a/lib:/usr/lib:/usr/lib64/:/usr/local/lib
-export NLS_LANG="AMERICAN_AMERICA.ZHS16GBK"
-export NLS_DATE_FORMAT='YYYY-MM-DD'
 
-WORKSPACE_PATH='/home/workspace/rqalpha/rqalpha/zeus/'
-LOCAL_IP='172.16.50.141'
-names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe' 'cixincap' 'ffe_bak')
-#names=('ffp' 'ffr' 'peg')
+#export PATH=$PATH:/usr/local/lib/:/usr/lib:/usr/lib64/
+#export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/oracle/12.1/client64a/lib:/usr/lib:/usr/lib64/:/usr/local/lib
+#export NLS_LANG="AMERICAN_AMERICA.ZHS16GBK"
+#export NLS_DATE_FORMAT='YYYY-MM-DD'
+
+#WORKSPACE_PATH='/home/workspace/rqalpha/rqalpha/zeus/'
+#LOCAL_IP='172.16.50.141'
+#names=('ffp' 'ffr' 'peg' 'grcxhs' 'grcxcap' 'ffe' 'cixincap' 'ffe_bak' 'ff_pb_eps')
+source "/home/workspace/rqalpha/rqalpha/monitor_config.sh"
 
 echo "========================================"
 for process_name in ${names[@]}; do

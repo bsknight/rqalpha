@@ -65,6 +65,16 @@ tar -zcvf - ./ffe_bak.py|openssl des3 -salt -k bsknight| dd of=ffe_bak.xsc
 rm ./persist -rf
 rm *.pyc
 
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/ff_pb_eps
+tar -zcvf - ./ff_pb_eps.py|openssl des3 -salt -k bsknight| dd of=ff_pb_eps.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/trend
+tar -zcvf - ./trend.py|openssl des3 -salt -k bsknight| dd of=trend.xsc
+rm ./persist -rf
+rm *.pyc
+
 cd $WORKPATH/pkg/rqalpha
 find ./ -name "*.py" | xargs rm -rf
 
