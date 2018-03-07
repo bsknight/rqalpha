@@ -91,6 +91,7 @@ class BaseDataSource(AbstractDataSource):
         'INDX': 1,
         'Future': 2,
         'ETF': 3,
+        'etf': 3,
         'LOF': 3,
         'FenjiA': 3,
         'FenjiB': 3,

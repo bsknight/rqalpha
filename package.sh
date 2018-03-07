@@ -75,6 +75,46 @@ tar -zcvf - ./trend.py|openssl des3 -salt -k bsknight| dd of=trend.xsc
 rm ./persist -rf
 rm *.pyc
 
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/upcycle
+tar -zcvf - ./upcycle.py|openssl des3 -salt -k bsknight| dd of=upcycle.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/quality
+tar -zcvf - ./quality.py|openssl des3 -salt -k bsknight| dd of=quality.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/resistance_50
+tar -zcvf - ./resistance_50.py|openssl des3 -salt -k bsknight| dd of=resistance_50.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/resistance_100
+tar -zcvf - ./resistance_100.py|openssl des3 -salt -k bsknight| dd of=resistance_100.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/resistance_100_intraday
+tar -zcvf - ./resistance_100_intraday.py|openssl des3 -salt -k bsknight| dd of=resistance_100_intraday.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/resistance_50_intraday
+tar -zcvf - ./resistance_50_intraday.py|openssl des3 -salt -k bsknight| dd of=resistance_50_intraday.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/quality2
+tar -zcvf - ./quality2.py|openssl des3 -salt -k bsknight| dd of=quality2.xsc
+rm ./persist -rf
+rm *.pyc
+
+cd $WORKPATH/pkg/rqalpha/rqalpha/zeus/thirty_groups
+tar -zcvf - ./thirty_groups.py|openssl des3 -salt -k bsknight| dd of=thirty_groups.xsc
+rm ./persist -rf
+rm *.pyc
+
 cd $WORKPATH/pkg/rqalpha
 find ./ -name "*.py" | xargs rm -rf
 

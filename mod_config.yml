@@ -17,7 +17,7 @@ mod:
   # 接收实时行情运行
   sys_stock_realtime:
     persist_path: ./persist/strategy/
-    fps: 3
+    fps: 10
     enabled: true
     priority: 500
   jqapi:
@@ -25,4 +25,7 @@ mod:
     enabled: true 
   sidi_api:
     lib: 'rqalpha.mod.mod_sidi_api'
+    enabled: true 
+  base_mod:
+    lib: 'rqalpha.mod.mod_base'
     enabled: true 
